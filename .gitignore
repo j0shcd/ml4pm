@@ -5,3 +5,4 @@ valve/
 *.npz
 *.png
 *.jpg
+*.csv
