@@ -7,10 +7,11 @@ class FeatureExtractor(nn.Module):
         super().__init__()
         self.conv1 = nn.Conv1d(1, 10, 3, padding=1)
         ###Add batch norm
+        nn.BatchNorm1d(10)
         self.conv2 = nn.Conv1d(10, 10, 3, padding=1)
-        ###Add batch norm
+        nn.BatchNorm1d(10)
         self.conv3 = nn.Conv1d(10, 10, 3, padding=1)
-        ###Add batch norm
+        nn.BatchNorm1d(10)
         self.dropout = nn.Dropout(0.1)
         self.fc = nn.Linear(10 * 512, 256)  # 512 is input dimension
 

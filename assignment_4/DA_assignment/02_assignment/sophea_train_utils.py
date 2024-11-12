@@ -10,9 +10,12 @@ from tqdm import tqdm
 
 def compute_covariance(features): 
     ######################
-    # Implement Coral loss
+    n = features.size(0)
+    mean = torch.mean(features, dim=0, keepdim=True)
+    cov = (features - mean).T @ (features - mean) / (n - 1)
+    return cov
     ######################
-    return # ... Fill
+    
 
 
 def train_baseline(model, source_loader, target_loader, args, device):
@@ -36,15 +39,22 @@ def train_baseline(model, source_loader, target_loader, args, device):
             
             total_loss += loss.item()
         
-        # Calculate training and testing metrics
-        # ..... Fill 
+        # TODO Calculate training and testing metrics
+        source_loss, source_accuracy = evaluate(model, source_loader, device)
+        target_loss, target_accuracy = evaluate(model, target_loader, device)
+
+
         # Print loss and accuracy for source and target 
-        
+        print('Source Accuracy: ', source_loss, source_accuracy)
+        print('Target Accuracy: ', target_loss, target_accuracy)
+
+        print('Total loss: ', total_loss)
+
     # Save final model
     torch.save(model.state_dict(), 'final_baseline.pth')
 
     # Return Final target accuracy 
-    return # ..... Fill 
+    return target_accuracy
 
 def train_coral(model, source_loader, target_loader, args, device):
     """CORAL training"""
@@ -71,8 +81,10 @@ def train_coral(model, source_loader, target_loader, args, device):
             source_outputs = model.classifier(source_features)
             cls_loss = F.nll_loss(source_outputs, source_target)
             
-            # CORAL loss
-            coral_loss = ... # ..... Fill
+            # TODO CORAL loss
+            source_cov = compute_covariance(source_features)
+            target_cov = compute_covariance(target_features)
+            coral_loss = torch.norm(source_cov - target_cov, p='fro') ** 2 / (4 * source_features.size(1) ** 2)
             
             # Total loss
             loss = cls_loss + args.coral_weight * coral_loss 
@@ -81,15 +93,22 @@ def train_coral(model, source_loader, target_loader, args, device):
             
             total_loss += loss.item()
         
-        # Calculate training and testing metrics
-        # ..... Fill 
+        # TODO Calculate training and testing metrics
+        source_loss, source_accuracy = evaluate(model, source_loader, device)
+        target_loss, target_accuracy = evaluate(model, target_loader, device)
+      
         # Print loss and accuracy for source and target 
+        print('Coral loss:', coral_loss)
+        print('Source Accuracy: ', source_loss, source_accuracy)
+        print('Target Accuracy: ', target_loss, target_accuracy)
+
+        print('Total loss: ', total_loss)
     
     # Save final model
     torch.save(model.state_dict(), 'final_coral.pth')
 
     # Return Final target accuracy 
-    return # ..... Fill 
+    return target_accuracy
 
 def train_adversarial(model, source_loader, target_loader, args, device):
     """Adversarial training"""
@@ -129,11 +148,12 @@ def train_adversarial(model, source_loader, target_loader, args, device):
             source_domain = torch.zeros(batch_size).long().to(device)
             target_domain = torch.ones(batch_size).long().to(device)
             
-            source_domain_pred = ... # ... Fill
-            target_domain_pred = ... # ... Fill 
-            
-            d_loss = ... #F.cross_entropy(...,...) + F.cross_entropy(...,...) Fill
-            
+            ###TODO###
+            source_domain_pred = discriminator(source_features)
+            target_domain_pred = discriminator(target_features)
+            d_loss = F.cross_entropy(source_domain_pred, source_domain) + F.cross_entropy(target_domain_pred, target_domain)
+            ####
+
             d_loss.backward()
             optimizer_d.step()
             total_loss_d += d_loss.item()
@@ -148,21 +168,24 @@ def train_adversarial(model, source_loader, target_loader, args, device):
             # Classification loss
             cls_loss = F.nll_loss(source_outputs, source_target)
             
-            # Adversarial loss
+            ## TODO ## generator loss
+            source_domain_pred = discriminator(source_features)
+            target_domain_pred = discriminator(target_features)
+            g_loss = F.cross_entropy(source_domain_pred, target_domain) + F.cross_entropy(target_domain_pred, source_domain)
+            ####
 
-            source_domain_pred = ... # ... Fill 
-            target_domain_pred = ... # ... Fill  
-            
-            g_loss = ... #F.cross_entropy(...,...) + F.cross_entropy(...,...) Fill
-            
             loss_g = cls_loss + args.adversarial_weight * g_loss
             loss_g.backward()
             optimizer_g.step()
             total_loss_g += loss_g.item()
         
-        # Calculate training and testing metrics
-        # ..... Fill 
+        # TODO Calculate training and testing metrics
+        source_loss, source_accuracy = evaluate(model, source_loader, device)
+        target_loss, target_accuracy = evaluate(model, target_loader, device)
+      
         # Print loss and accuracy for source and target 
+        print(f"Epoch {epoch}: Source Loss {source_loss:.2f} Accuracy: {100 * source_accuracy:.2f}%")
+        print(f"Target Loss {target_loss:.2f} Accuracy: {100 * target_accuracy:.2f}%")
     
     # Save final model
     torch.save({
@@ -171,7 +194,7 @@ def train_adversarial(model, source_loader, target_loader, args, device):
     }, 'final_adversarial.pth')
 
     # Return Final target accuracy 
-    return # ..... Fill 
+    return target_accuracy
 
 
 def train_adabn(model, source_loader, target_loader, args, device):
@@ -203,16 +226,39 @@ def train_adabn(model, source_loader, target_loader, args, device):
 
     ########################################################
     # Implement AdaBN (foward on target data for args.epoch)
+    # Concatenate neuron responses on all target images
+    all_features = []
+    with torch.no_grad():
+        for data, _ in target_loader:
+            data = data.to(device)
+            features = model.feature_extractor(data)  # Extract features from the model
+            all_features.append(features)
+    
+    # Concatenate all features and calculate mean and variance
+    all_features = torch.cat(all_features, dim=0)
+    target_mean = all_features.mean(dim=0)
+    target_var = all_features.var(dim=0, unbiased=False)
+
+    # Update BN layers with target domain statistics
+    for module in model.modules():
+        if isinstance(module, nn.BatchNorm1d) or isinstance(module, nn.BatchNorm2d):
+            module.running_mean = target_mean
+            module.running_var = target_var
     ######################################################
     
-    # Calculate target accuracy and print it 
-    # ..... Fill 
+    # TODO Calculate target accuracy and print it 
+    source_loss, source_accuracy = evaluate(model, source_loader, device)
+    target_loss, target_accuracy = evaluate(model, target_loader, device)
+    
+    # Print loss and accuracy for source and target 
+    print(f"Epoch {epoch}: Source Loss {source_loss:.2f} Accuracy: {100 * source_accuracy:.2f}%")
+    print(f"Target Loss {target_loss:.2f} Accuracy: {100 * target_accuracy:.2f}%")
     
     # Save final model
     torch.save(model.state_dict(), 'final_adabn.pth')
 
     # Return Final target accuracy 
-    return # ..... Fill 
+    return target_accuracy
 
 def evaluate(model, loader, device):
     model.eval()
