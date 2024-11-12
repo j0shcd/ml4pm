@@ -6,3 +6,5 @@ valve/
 *.png
 *.jpg
 *.csv
+**/Data/
+**/data/
