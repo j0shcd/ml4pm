@@ -5,6 +5,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+
 
 
 
@@ -23,6 +25,14 @@ def train_baseline(model, source_loader, target_loader, args, device):
     print("\nTraining Baseline Model...")
 
     optimizer = optim.Adam(model.parameters(), lr = args.lr)
+
+    # Metrics storage
+    metrics = {
+        'source_loss': [],
+        'target_loss': [],
+        'source_accuracy': [],
+        'target_accuracy': []
+    }
     
     for epoch in range(args.epochs):
         model.train()
@@ -43,15 +53,20 @@ def train_baseline(model, source_loader, target_loader, args, device):
         source_loss, source_accuracy = evaluate(model, source_loader, device)
         target_loss, target_accuracy = evaluate(model, target_loader, device)
 
+        # Store metrics for plotting
+        metrics['source_loss'].append(source_loss)
+        metrics['target_loss'].append(target_loss)
+        metrics['source_accuracy'].append(source_accuracy)
+        metrics['target_accuracy'].append(target_accuracy)
 
         # Print loss and accuracy for source and target 
-        print('Source Accuracy: ', source_loss, source_accuracy)
-        print('Target Accuracy: ', target_loss, target_accuracy)
-
-        print('Total loss: ', total_loss)
+        print(f"Epoch {epoch}: Total Loss: {total_loss:.4f}")
+        print('Source Loss & Accuracy: ', source_loss, source_accuracy)
+        print('Target Loss & Accuracy: ', target_loss, target_accuracy)
 
     # Save final model
     torch.save(model.state_dict(), 'final_baseline.pth')
+    plot_metrics(metrics, 'Baseline Model')
 
     # Return Final target accuracy 
     return target_accuracy
@@ -59,6 +74,14 @@ def train_baseline(model, source_loader, target_loader, args, device):
 def train_coral(model, source_loader, target_loader, args, device):
     """CORAL training"""
     print("\nTraining CORAL Model...")
+
+    # Metrics storage
+    metrics = {
+        'source_loss': [],
+        'target_loss': [],
+        'source_accuracy': [],
+        'target_accuracy': []
+    }
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     for epoch in range(args.epochs):
@@ -96,16 +119,22 @@ def train_coral(model, source_loader, target_loader, args, device):
         # TODO Calculate training and testing metrics
         source_loss, source_accuracy = evaluate(model, source_loader, device)
         target_loss, target_accuracy = evaluate(model, target_loader, device)
+
+        # Store metrics for plotting
+        metrics['source_loss'].append(source_loss)
+        metrics['target_loss'].append(target_loss)
+        metrics['source_accuracy'].append(source_accuracy)
+        metrics['target_accuracy'].append(target_accuracy)
       
         # Print loss and accuracy for source and target 
-        print('Coral loss:', coral_loss)
-        print('Source Accuracy: ', source_loss, source_accuracy)
-        print('Target Accuracy: ', target_loss, target_accuracy)
-
-        print('Total loss: ', total_loss)
+        print(f"Epoch {epoch}: Source Loss {source_loss:.2f} Accuracy: {100 * source_accuracy:.2f}%")
+        print(f"Target Loss {target_loss:.2f} Accuracy: {100 * target_accuracy:.2f}%")
+    
     
     # Save final model
     torch.save(model.state_dict(), 'final_coral.pth')
+
+    plot_metrics(metrics, 'Coral Model')
 
     # Return Final target accuracy 
     return target_accuracy
@@ -114,6 +143,14 @@ def train_adversarial(model, source_loader, target_loader, args, device):
     """Adversarial training"""
     print("\nTraining Adversarial Model...")
     
+    # Metrics storage
+    metrics = {
+        'source_loss': [],
+        'target_loss': [],
+        'source_accuracy': [],
+        'target_accuracy': []
+    }
+
     discriminator = nn.Sequential(
         nn.Linear(256, 1024),
         nn.BatchNorm1d(1024),
@@ -182,6 +219,12 @@ def train_adversarial(model, source_loader, target_loader, args, device):
         # TODO Calculate training and testing metrics
         source_loss, source_accuracy = evaluate(model, source_loader, device)
         target_loss, target_accuracy = evaluate(model, target_loader, device)
+
+        # Store metrics for plotting
+        metrics['source_loss'].append(source_loss)
+        metrics['target_loss'].append(target_loss)
+        metrics['source_accuracy'].append(source_accuracy)
+        metrics['target_accuracy'].append(target_accuracy)
       
         # Print loss and accuracy for source and target 
         print(f"Epoch {epoch}: Source Loss {source_loss:.2f} Accuracy: {100 * source_accuracy:.2f}%")
@@ -193,6 +236,8 @@ def train_adversarial(model, source_loader, target_loader, args, device):
         'discriminator': discriminator.state_dict()
     }, 'final_adversarial.pth')
 
+    plot_metrics(metrics, 'Adversarial Model')
+
     # Return Final target accuracy 
     return target_accuracy
 
@@ -203,6 +248,14 @@ def train_adabn(model, source_loader, target_loader, args, device):
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     
+    # Metrics storage
+    metrics = {
+        'source_loss': [],
+        'target_loss': [],
+        'source_accuracy': [],
+        'target_accuracy': []
+    }
+
     # 1. Train on source
     for epoch in range(args.epochs):
         model.train()
@@ -218,6 +271,12 @@ def train_adabn(model, source_loader, target_loader, args, device):
             optimizer.step()
             
             total_loss += loss.item()
+
+         # Store metrics for plotting
+        metrics['source_loss'].append(source_loss)
+        metrics['target_loss'].append(target_loss)
+        metrics['source_accuracy'].append(source_accuracy)
+        metrics['target_accuracy'].append(target_accuracy)
     
     # 2. Adapt BN statistics on target domain
     model.train()
@@ -226,24 +285,18 @@ def train_adabn(model, source_loader, target_loader, args, device):
 
     ########################################################
     # Implement AdaBN (foward on target data for args.epoch)
-    # Concatenate neuron responses on all target images
-    all_features = []
-    with torch.no_grad():
-        for data, _ in target_loader:
-            data = data.to(device)
-            features = model.feature_extractor(data)  # Extract features from the model
-            all_features.append(features)
-    
-    # Concatenate all features and calculate mean and variance
-    all_features = torch.cat(all_features, dim=0)
-    target_mean = all_features.mean(dim=0)
-    target_var = all_features.var(dim=0, unbiased=False)
-
-    # Update BN layers with target domain statistics
     for module in model.modules():
-        if isinstance(module, nn.BatchNorm1d) or isinstance(module, nn.BatchNorm2d):
-            module.running_mean = target_mean
-            module.running_var = target_var
+        if isinstance(module, nn.BatchNorm1d):
+            module.running_mean.zero_()
+            module.running_var.fill_(1)
+            module.num_batches_tracked.zero_()
+            module.momentum = 1.0  # Set momentum to 1.0 for full adaptation
+
+    # Run target data through model to update BN statistics
+    with torch.no_grad():
+        for data, _ in tqdm(target_loader, desc='Adapting BN'):
+            data = data.to(device)
+            model(data)
     ######################################################
     
     # TODO Calculate target accuracy and print it 
@@ -256,6 +309,8 @@ def train_adabn(model, source_loader, target_loader, args, device):
     
     # Save final model
     torch.save(model.state_dict(), 'final_adabn.pth')
+
+    plot_metrics(metrics, 'AdaBN Model')
 
     # Return Final target accuracy 
     return target_accuracy
@@ -276,3 +331,31 @@ def evaluate(model, loader, device):
             total += target.size(0)
     
     return total_loss / len(loader), correct / total
+
+
+def plot_metrics(metrics, method_name):
+    epochs = range(1, len(metrics['source_loss']) + 1)
+    
+    # Plot Loss
+    plt.figure(figsize=(12, 5))
+    plt.subplot(1, 2, 1)
+    plt.plot(epochs, metrics['source_loss'], label='Source Loss')
+    plt.plot(epochs, metrics['target_loss'], label='Target Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.title(f'{method_name} Loss Across Epochs')
+    plt.legend()
+
+    # Plot Accuracy
+    plt.subplot(1, 2, 2)
+    plt.plot(epochs, metrics['source_accuracy'], label='Source Accuracy')
+    plt.plot(epochs, metrics['target_accuracy'], label='Target Accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.title(f'{method_name} Accuracy Across Epochs')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+    return
