@@ -15,9 +15,9 @@ class FeatureExtractor(nn.Module):
         self.fc = nn.Linear(10 * 512, 256)  # 512 is input dimension
 
     def forward(self, x):
-        x = self.dropout(F.relu((self.conv1(x))))
-        x = self.dropout(F.relu((self.conv2(x))))
-        x = self.dropout(F.relu((self.conv3(x))))
+        x = self.dropout(F.relu(self.bn1(self.conv1(x))))
+        x = self.dropout(F.relu(self.bn2(self.conv2(x))))
+        x = self.dropout(F.relu(self.bn3(self.conv3(x))))
         x = x.view(x.size(0), -1)
         x = F.relu(self.fc(x))
         return x

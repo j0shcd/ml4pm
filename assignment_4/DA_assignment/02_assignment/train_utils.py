@@ -17,7 +17,6 @@ def compute_covariance(features):
     ######################
     
 
-
 def train_baseline(model, source_loader, target_loader, args, device):
     """Standard source training"""
     print("\nTraining Baseline Model...")
@@ -106,7 +105,7 @@ def train_coral(model, source_loader, target_loader, args, device):
             source_outputs = model.classifier(source_features)
             cls_loss = F.nll_loss(source_outputs, source_target)
             
-            # TODO CORAL loss
+            # CORAL loss
             source_cov = compute_covariance(source_features)
             target_cov = compute_covariance(target_features)
             coral_loss = torch.norm(source_cov - target_cov, p='fro') ** 2 / (4 * source_features.size(1) ** 2)
