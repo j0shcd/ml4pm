@@ -8,3 +8,6 @@ valve/
 *.csv
 **/Data/
 **/data/
+*.txt.*
+*.txt
+**/IMC-HOW-XAI/
